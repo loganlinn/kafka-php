@@ -38,7 +38,7 @@ $partition = isset($options["p"]) ? $options["p"] : 0;
 list($host,$port) = explode(":", $options["b"]);
 
 // connection
-$kafka = new \Kafka\Kafka($host, $port, 6, 0.71);
+$kafka = new \Kafka\Kafka($host, $port, 6, 0.8);
 
 // request channel
 $producer = $kafka->createProducer();

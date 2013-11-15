@@ -22,6 +22,7 @@ class Message
     private $offset;
     private $compression;
     private $payload;
+    private $key;
 
     /**
      * Constructor is private used by the static creator methods below.
@@ -31,6 +32,7 @@ class Message
      * @param string $payload
      * @param int    $compression
      * @param Offset $offset
+     * @param key    $key
      *
      * @throws \Kafka\Exception
      */
@@ -39,7 +41,8 @@ class Message
         $partition,
         $payload,
         $compression = \Kafka\Kafka::COMPRESSION_NONE,
-        Offset $offset = NULL
+        Offset $offset = NULL,
+        $key = NULL
     )
     {
         if (!$topic) {
@@ -59,6 +62,7 @@ class Message
         $this->offset = $offset;
         $this->compression = $compression;
         $this->payload = $payload;
+        $this->key = $key;
     }
 
     /**
@@ -84,6 +88,14 @@ class Message
     final public function payload()
     {
         return $this->payload;
+    }
+
+    /**
+     * Final value for the key
+     * @return string
+     */
+    final public function key() {
+        return $this->key;
     }
 
     /**

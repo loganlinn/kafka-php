@@ -15,12 +15,11 @@ namespace Kafka\V08;
 
 use Kafka\Kafka;
 use Kafka\Message;
+use Kafka\Iproducer;
 
-require_once realpath(dirname(__FILE__) . '/../V07/Channel.php');
-
+require_once 'Channel.php';
 class ProducerChannel
-    extends Channel
-    implements IProducer
+    extends Channel implements IProducer
 {
     /**
      * @var array
@@ -28,12 +27,28 @@ class ProducerChannel
     private $messageQueue;
 
     /**
-     * @param Kafka $connection
+     * Required acknowledgement from brokker
+     *
+     * This field indicates how many acknowledgements the servers
+     * should receive before responding to the requet:
+     * 0 -> dont wait for acks
+     * 1 -> wait until leader commit the message
+     * -1 -> wait untill all replcia commit the message
+     * @var Integer
      */
-    public function __construct(Kafka $connection)
+    private $requiredAcks = \Kafka\Kafka::REQUEST_ACK_LEADER;
+
+    private $ackTimeout = 1000; // 1 sec
+
+    /**
+     * @param Kafka $connection
+     * @param $requiredAcks @see requireAcks
+     */
+    public function __construct(Kafka $connection, $requiredAcks = \Kafka\Kafka::REQUEST_ACK_LEADER)
     {
         parent::__construct($connection);
         $this->messageQueue = array();
+        $this->requiredAcks = $requiredAcks;
     }
 
     /**
@@ -50,6 +65,7 @@ class ProducerChannel
             [] = $message;
     }
 
+
     /**
      * Produce all messages added.
      * @throws \Kafka\Exception On Failure
@@ -58,52 +74,67 @@ class ProducerChannel
     public function produce()
     {
 
-        //in 0.8, a new wire format was introduced which contains request versions
-        $versionId = 0;
-        $correlationId = 0;
-        $clientId = '';
-        $requiredAcks = 1;
-        $numTopics = 1;
+        if (count($this->messageQueue) == 0) {
+            return true;
+        }
 
-        //produce request header
-        $data = pack('n', \Kafka\Kafka::REQUEST_KEY_PRODUCE); //short
-        $data .= pack('n', $versionId);//short
-        $data .= pack('N', $correlationId);//int
-        $data .= pack('n', strlen($clientId)) . $clientId;//short string
-        $data .= pack('n', $requiredAcks);//short
-        $data .= pack('N', $ackTimeoutMs = 5000);//int
-        //produce request topic structure
-        $numTopics = count($this->messageQueue);
-        $data .= pack('N', $numTopics);//int
-        foreach ($this->messageQueue as $topic => $partitions) {
-            $data .= pack('n', strlen($topic)) . $topic;//short string
-            $data .= pack('N', count($partitions));//int
-            foreach ($partitions as $partition => $messageSet) {
-                $data .= pack('N', $partition);//int
-                $messageSetData = '';
-                foreach ($messageSet as $message) {
-                    $messageSetData .= $this->packMessage($message);
+        foreach ($this->messageQueue as $topic => &$partitions) {
+            $metadata = $this->getTopicMetadata($topic);
+            $topicMetadata = $metadata['topics'][$topic];
+
+            foreach ($partitions as $partition => &$messageSet) {
+                $leaderId = @$topicMetadata['partitions'][$partition]['leader_id'];
+                // send message to the leader
+
+                // create message set
+                $data = $this->encodeRequestHeader(\Kafka\Kafka::REQUEST_KEY_PRODUCE);
+                $data .= pack('n', $this->requiredAcks);
+                $data .= pack('N', $this->ackTimeout);
+
+                $data .= pack('N', 1); // num topicsc
+                $data .= $this->writeString($topic);
+                $data .= pack('N', 1); // num partition
+                $data .= pack('N', $partition);
+
+                $messageSet = $this->packMessageSet($messageSet);
+                $data .= pack('N', strlen($messageSet)); // msg set size
+                $data .= $messageSet;
+
+
+                if ($this->hasIncomingData()) {
+                    throw new \Kafka\Exception(
+                        "The channel has incomming data"
+                    );
                 }
-                $data .= pack('N', strlen($messageSetData)); //int
-                $data .= $messageSetData; //
+
+                $expectsResposne = $this->requiredAcks > 0;
+                if ($this->send($data, $expectsResposne)) {
+                    unset($partitions[$partition]);
+                }
+                unset($messageSet);
             }
+            unset($partitions);
         }
-        if ($this->send($data)) {
-               if ($this->hasIncomingData()) {
-                   $this->messageQueue = array();
-                   if ($this->getRemainingBytes() == 0) {
-                       throw new \Kafka\Exception(
-                           "Something went wrong but Kafka is not sending propper error code"
-                       );
-                   }
-                   exit("!" . $this->getRemainingBytes() . "\n");
 
-                   return TRUE;
-
-               } else {
-                    throw new \Kafka\Exception("Produce request was not acknowledged by the broker");
-               }
-        }
-        throw new \Kafka\Exception("Produce request was not sent.");
     }
+
+    /**
+     * Pack multiple message into the MessageSet protocol
+     *
+     * https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-Messagesets
+     *
+     * @param Array $mssages array of Kafka\Message
+     * @return binary representation of mesage set
+     */
+    private function packMessageSet($messages)
+    {
+
+        $data = '';
+        foreach($messages as &$message) {
+            $data .= $this->packMessage($message);
+        }
+
+       return $data;
+    }
+
 }

@@ -46,19 +46,30 @@ class Kafka
     const OFFSETS_LATEST = -1;
     const OFFSETS_EARLIEST = -2;
 
+    const CLIENT_ID = 'KAFKA-PHP';
+
+    /* v 0.8 constant */
+    const REQUEST_KEY_METADATA = 3;
+    const REQUEST_API_VERSION = 0;
+
+    const REQUEST_ACK_NONE = 0;
+    const REQUEST_ACK_LEADER = 1;
+    const REQUEST_ACK_ALL = -1;
+
     // connection properties
     private $host;
     private $port;
     private $timeout;
     private $producerClass;
     private $consumerClass;
+    private $clientId;
 
     /**
      * Constructor
      *
      * @param string $host
      * @param int    $port
-     * @param int    $timeout
+     * @param int    $timeout socket timeout, in seconds
      * @param int    $kapiVersion Kafka API Version
      *     - the client currently recoginzes difference in the wire
      *    format prior to the version 0.8 and the versioned
@@ -68,12 +79,14 @@ class Kafka
         $host = 'localhost',
         $port = 9092,
         $timeout = 6,
-        $apiVersion = 0.7
+        $apiVersion = 0.8,
+        $clientId = self::CLIENT_ID
     )
     {
         $this->host = $host;
         $this->port = $port;
         $this->timeout = $timeout;
+        $this->clientId = $clientId;
         $apiImplementation = self::getApiImplementation($apiVersion);
         include_once "{$apiImplementation}/ProducerChannel.php";
         $this->producerClass = "\Kafka\\$apiImplementation\ProducerChannel";
@@ -119,11 +132,11 @@ class Kafka
     /**
      * @return IProducer
      */
-    public function createProducer()
+    public function createProducer($requiredAcks = self::REQUEST_ACK_LEADER)
     {
         $producerClass = $this->producerClass;
 
-        return new $producerClass($this);
+        return new $producerClass($this, $requiredAcks);
     }
 
     /**
@@ -134,5 +147,8 @@ class Kafka
         $consumerClass = $this->consumerClass;
 
         return new $consumerClass($this);
+    }
+    public function getClientid() {
+        return $this->clientId;
     }
 }
