@@ -114,7 +114,7 @@ class ProducerChannel
                         $response = $this->loadProduceResponse();
                         $errorCode = $response[$topic][$partition]['error_code'];
                         if ($errorCode != 0) {
-                            throw \Kafka\Exception::createException($errorCode);
+                            throw \Kafka\Exception::createResponseException($errorCode);
                         }
                     }
                     unset($partitions[$partition]);

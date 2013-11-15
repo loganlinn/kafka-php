@@ -7,7 +7,7 @@ class Exception extends \RuntimeException
     /**
      * Create Response exception from kafka server
      */
-    public static function createException(
+    public static function createResponseException(
         $errorNo,
         $message = null,
         $code = 0,
@@ -16,36 +16,49 @@ class Exception extends \RuntimeException
     {
         switch($errorNo) {
         case -1:
-            $errorClass = \Kafka\Unknown;
+            $error = new Exception\Unknown($message, $code, $previous);
+            break;
         case 1:
-            $errorClass = \Kafka\OffsetOutOfRange;
+            $error = new Exception\OffsetOutOfRange($message, $code, $previous);
+            break;
         case 2:
-            $errorClass = \Kafka\InvalidMessage;
+            $error = new Exception\InvalidMessage($message, $code, $previous);
+            break;
         case 3:
-            $errorClass = \Kafka\UnknownTopicOrPartition;
+            $error = new Exception\UnknownTopicOrPartition($message, $code, $previous);
+            break;
         case 4:
-            $errorClass = \Kafka\InvalidMessageSize;
+            $error = new Exception\InvalidMessageSize($message, $code, $previous);
+            break;
         case 5:
-            $errorClass = \Kafka\LeaderNotAvailable;
+            $error = new Exception\LeaderNotAvailable($message, $code, $previous);
+            break;
         case 6:
-            $errorClass = \Kafka\NotLeaderForPartition;
+            $error = new Exception\NotLeaderForPartition($message, $code, $previous);
+            break;
         case 7:
-            $errorClass = \Kafka\RequestTimedOut;
+            $error = new Exception\RequestTimedOut($message, $code, $previous);
+            break;
         case 8:
-            $errorClass = \Kafka\BrokerNotAvailable;
+            $error = new Exception\BrokerNotAvailable($message, $code, $previous);
+            break;
         case 9:
-            $errorClass = \Kafka\ReplicaNotAvailable;
+            $error = new Exception\ReplicaNotAvailable($message, $code, $previous);
+            break;
         case 10:
-            $errorClass = \Kafka\MessageSizeTooLarge;
+            $error = new Exception\MessageSizeTooLarge($message, $code, $previous);
+            break;
         case 11:
-            $errorClass = \Kafka\StaleControllerEpochCode;
+            $error = new Exception\StaleControllerEpochCode($message, $code, $previous);
+            break;
         case 12:
-            $errorClass = \Kafka\OffsetMetadataTooLargeCode;
+            $error = new Exception\OffsetMetadataTooLargeCode($message, $code, $previous);
+            break;
         default:
-            return new self("Unknwon response error code number exception");
+            $error = new self("Unknwon response error code number exception");
         }
 
-        return new $errorClass($message, $code, $previous);
+        return new $error;
     }
 }
 
