@@ -428,7 +428,6 @@ abstract class Channel
 
         if (!is_array($topics)) {
             $topics = array($topics);
-
         }
 
         $data .= pack('N', count($topics));;
@@ -437,14 +436,8 @@ abstract class Channel
             $data .= $this->writeString($topic);
         }
 
-        if ($this->send($data)) {
-               if ($this->hasIncomingData()) {
-                $metadata = $this->loadMetadataResponse();
-                return $metadata;
-
-               } else {
-                    throw new \Kafka\Exception("Failed to get metadata from brooker");
-               }
+        if ($this->send($data, true)) {
+            return $this->loadMetadataResponse();
         } else {
             throw new \Kafka\Exception("Failed to send metadata to brooker");
         }
@@ -457,10 +450,14 @@ abstract class Channel
      *
      * @param Resource $stream
      */
-    private function loadMetadataResponse($stream = null)
+    protected function loadMetadataResponse($stream = null)
     {
         if ($stream === null) {
             $stream = $this->socket;
+        }
+
+        if (!$this->hasIncomingData()) {
+            throw new \Kafka\Exception("Failed to get metadata response from the broker");
         }
 
         $metadata = array();
@@ -468,7 +465,7 @@ abstract class Channel
         // Read Broker
         $brokers = array();
         $numBroker = current(unpack('N', $this->read(4, $stream)));
-        for ($i = 0; $i < $numBroker; $i++) {
+        for ($i=0; $i<$numBroker; $i++) {
             $broker = array();
             $brokerId = current(unpack('N', $this->read(4, $stream)));
 
@@ -483,14 +480,14 @@ abstract class Channel
         // Read TopicMetadata
         $topics = array();
         $numTopic = current(unpack('N', $this->read(4, $stream)));
-        for ($i = 0; $i < $numTopic; $i++) {
+        for ($i=0; $i<$numTopic; $i++) {
             $topicMetadata = array();
             $topicMetadata['error_code'] = current(unpack('n', $this->read(2, $stream)));
             $topicName = $this->readString($stream);
 
             $partitions = array();
             $numPartition = current(unpack('N', $this->read(4, $stream)));
-            for ($j = 0; $j < $numPartition; $j++) {
+            for ($j=0; $j<$numPartition; $j++) {
                 $partitionMetadata = array();
                 $partitionMetadata['error_code'] = current(unpack('n', $this->read(2, $stream)));
 
@@ -516,6 +513,44 @@ abstract class Channel
     }
 
     /**
+     * Load Response after producing a message
+     *
+     * @param Resource $stream
+     */
+    protected function loadProduceResponse($stream = null)
+    {
+        if ($stream === null) {
+            $stream = $this->socket;
+        }
+
+        if (!$this->hasIncomingData()) {
+            throw new \Kafka\Exception("Failed to get metadata response from the broker");
+        }
+
+        $numTopic = current(unpack('N', $this->read(4, $stream)));
+
+        $response = array();
+        for ($i=0; $i<$numTopic; $i++) {
+            $topic = $this->readString($stream);
+
+            $numPartition = current(unpack('N', $this->read(4, $stream)));
+            for ($j=0; $j<$numPartition; $j++) {
+                $partition = current(unpack('N', $this->read(4, $stream)));
+                $errorCode = current(unpack('n', $this->read(2, $stream)));
+                $offset = new \Kafka\Offset_64bit();
+                $offset->setData($this->read(8, $stream));
+
+                $response[$topic][$partition]['error_code'] = $errorCode;
+                $response[$topic][$partition]['offset'] = $offset;
+            }
+        }
+
+        return $response;
+
+    }
+
+
+    /**
      * Pack message
      *
      * Internal method for packing message into kafka wire format.
@@ -527,10 +562,7 @@ abstract class Channel
      *
      * @throws \Kafka\Exception
      */
-    protected function packMessage(
-        Message $message,
-        $overrideCompression = null
-    )
+    protected function packMessage( Message $message, $overrideCompression = null)
     {
         $compression = $overrideCompression === null
             ? $message->compression()

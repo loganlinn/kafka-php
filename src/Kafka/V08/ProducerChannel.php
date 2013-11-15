@@ -33,6 +33,7 @@ class ProducerChannel
      * should receive before responding to the requet:
      * 0 -> dont wait for acks
      * 1 -> wait until leader commit the message
+     * n -> n > 1, wait for n broker to commit
      * -1 -> wait untill all replcia commit the message
      * @var Integer
      */
@@ -109,6 +110,13 @@ class ProducerChannel
 
                 $expectsResposne = $this->requiredAcks > 0;
                 if ($this->send($data, $expectsResposne)) {
+                    if ($expectsResposne) {
+                        $response = $this->loadProduceResponse();
+                        $errorCode = $response[$topic][$partition]['error_code'];
+                        if ($errorCode != 0) {
+                            throw \Kafka\Exception::createException($errorCode);
+                        }
+                    }
                     unset($partitions[$partition]);
                 }
                 unset($messageSet);
@@ -116,6 +124,7 @@ class ProducerChannel
             unset($partitions);
         }
 
+        return true;
     }
 
     /**
