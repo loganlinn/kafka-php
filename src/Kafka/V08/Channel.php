@@ -17,16 +17,41 @@ use Kafka\Offset;
 use Kafka\Kafka;
 use Kafka\Message;
 
-abstract class Channel
+class Channel
 {
     /**
-     * Connection
+     * brooker hostname:port
      *
-     * Connection object.
-     *
-     * @var Kafka
+     * @var String
      */
-    private $connection;
+    private $connectionString;
+
+    /**
+     * Socket timeout in seconds
+     *
+     * @var Integer
+     */
+    private $timeout;
+
+    /**
+     * Kafka Client-ID
+     *
+     * @var String
+     */
+    private $clientId;
+
+    /**
+     * Timeout on kafka side to process an item
+     * @var Integer
+     */
+    private $ackTimeout = 1000;
+
+    /**
+     * required Acknowldegement from kafka
+     *
+     * @see \Kafka\V08\ProducerChannel
+     */
+    private $requiredAcks;
 
     /**
      * Socket
@@ -105,18 +130,29 @@ abstract class Channel
      */
     private $brokerList = array();
 
+
     /**
      * Constructor
      *
-     * @param Kafka   $connection
-     * @param String  $topic
-     * @param Integer $partition
+     * @param Kafka   $connectionString in format ('hostname:port')
+     * @param Integer $timeout socket timout in seconds
+     * @param String  $clientId
      */
-    public function __construct(\Kafka\Kafka $connection)
+    public function __construct($connectionString, $timeout, $clientId, $requiredAcks)
     {
-        $this->connection = $connection;
+        $this->connectionString = $connectionString;
+        $this->timeout = $timeout;
+        $this->clientId = $clientId;
+        $this->requiredAcks = $requiredAcks;
         $this->readable = false;
         $this->socketSendRetry = 3;
+    }
+
+    /**
+     * 0.8 has correlationId which will be passed back to the client
+     */
+    private function generateRequestId() {
+        return ++$this->_correlationId;
     }
 
     /**
@@ -158,19 +194,20 @@ abstract class Channel
     {
         if (!is_resource($this->socket)) {
             if (!$this->socket = @stream_socket_client(
-                $this->connection->getConnectionString(),
+                $this->getConnectionString($this->brokerNum),
                 $errno,
                 $errstr)
             ) {
                 throw new \Kafka\Exception($errstr, $errno);
             }
-            stream_set_timeout($this->socket, $this->connection->getTimeout());
+            stream_set_timeout($this->socket, $this->timeout);
             //stream_set_read_buffer($this->socket,  65535);
             //stream_set_write_buffer($this->socket, 65535);
         }
 
         return $this->socket;
     }
+
 
     /**
      * Send
@@ -182,8 +219,10 @@ abstract class Channel
      *
      * @throws \Kafka\Exception
      */
-    final protected function send($requestData, $expectsResposne = true)
+    final public function send($requestData, $expectsResposne = true)
     {
+        //echo($this->strToHex($requestData) . "\n"); //debug
+
         $retry = $this->socketSendRetry;
         while ($retry > 0) {
             if ($this->socket === null) {
@@ -227,7 +266,7 @@ abstract class Channel
      *
      * @throws \Kafka\Exception
      */
-    final protected function read($size, $stream = null)
+    final public function read($size, $stream = null)
     {
         if ($stream === null) {
             if (!$this->readable) {
@@ -277,6 +316,7 @@ abstract class Channel
         return $result;
     }
 
+
     /**
      * Has incoming data
      *
@@ -287,7 +327,7 @@ abstract class Channel
      *
      * @return Boolean
      */
-    protected function hasIncomingData()
+    public function hasIncomingData()
     {
         if (is_resource($this->innerStream)) {
             $this->readBytes = 0;
@@ -363,161 +403,11 @@ abstract class Channel
 
 
     /**
-     * 0.8 has correlationId which will be passed back to the client
-     */
-    private function generateRequestId() {
-        return ++$this->_correlationId;
-    }
-
-    protected function encodeRequestHeader($requestKey) {
-        $data = pack('n', $requestKey); //short
-        $data .= pack('n', \Kafka\Kafka::REQUEST_API_VERSION); //short
-        $data .= pack('N', $this->generateRequestId());//int
-        $data .= $this->writeString($this->connection->getClientid());
-
-        return $data;
-    }
-
-    /**
-     * Write string wire format
-     *
-     * write 2 byte size and the stream
-     * @param String $message
-     * @param String $format length prefix string format. see php pack()
-     */
-    protected function writeString($message, $format='n') {
-        if (empty($message)) {
-            if ($format == 'n') {
-                $data = pack($format, 0xFFFF);// -1 short signed short
-            } elseif ($format == 'N') {
-                $data = pack($format, 0xFFFFFFFF);// -1 short signed short
-            } else {
-                $data = pack($format, -1);
-            }
-        } else {
-            $data = pack($format, strlen($message)) . $message;
-        }
-
-        return $data;
-    }
-
-    /**
-     * Read string format from kafka
-     *
-     * read 2 byte size and read the string
-     * @param Resource $stream
-     */
-    private function readString($stream = null)
-    {
-        if ($stream === null) {
-            $stream = $this->socket;
-        }
-
-        $len = current(unpack('n', $this->read(2, $stream)));
-        return $this->read($len, $stream);
-    }
-
-    /**
-     * Get metadata information of a topic or multiple topic
-     *
-     * @param Mixed $topics single string topcis or array of topics
-     */
-    public function getTopicMetadata($topics)
-    {
-        $data = $this->encodeRequestHeader(\Kafka\Kafka::REQUEST_KEY_METADATA);
-
-        if (!is_array($topics)) {
-            $topics = array($topics);
-        }
-
-        $data .= pack('N', count($topics));;
-
-        foreach ($topics as $topic) {
-            $data .= $this->writeString($topic);
-        }
-
-        if ($this->send($data, true)) {
-            return $this->loadMetadataResponse();
-        } else {
-            throw new \Kafka\Exception("Failed to send metadata to brooker");
-        }
-    }
-
-    /**
-     * Load metadata from a stream
-     *
-     * This will also update current $brokerList information
-     *
-     * @param Resource $stream
-     */
-    protected function loadMetadataResponse($stream = null)
-    {
-        if ($stream === null) {
-            $stream = $this->socket;
-        }
-
-        if (!$this->hasIncomingData()) {
-            throw new \Kafka\Exception("Failed to get metadata response from the broker");
-        }
-
-        $metadata = array();
-
-        // Read Broker
-        $brokers = array();
-        $numBroker = current(unpack('N', $this->read(4, $stream)));
-        for ($i=0; $i<$numBroker; $i++) {
-            $broker = array();
-            $brokerId = current(unpack('N', $this->read(4, $stream)));
-
-            $broker['host'] = $this->readString($stream);
-            $broker['port'] = current(unpack('N', $this->read(4, $stream)));
-
-            $brokers[$brokerId] = $broker;
-            $this->brokerList[$brokerId] = $broker;
-        }
-        $metadata['brokers'] = $brokers;
-
-        // Read TopicMetadata
-        $topics = array();
-        $numTopic = current(unpack('N', $this->read(4, $stream)));
-        for ($i=0; $i<$numTopic; $i++) {
-            $topicMetadata = array();
-            $topicMetadata['error_code'] = current(unpack('n', $this->read(2, $stream)));
-            $topicName = $this->readString($stream);
-
-            $partitions = array();
-            $numPartition = current(unpack('N', $this->read(4, $stream)));
-            for ($j=0; $j<$numPartition; $j++) {
-                $partitionMetadata = array();
-                $partitionMetadata['error_code'] = current(unpack('n', $this->read(2, $stream)));
-
-                $partitionId = current(unpack('N', $this->read(4, $stream)));
-
-                $partitionMetadata['leader_id'] = current(unpack('N', $this->read(4, $stream)));
-
-                $numReplica = current(unpack('N', $this->read(4, $stream)));
-                $partitionMetadata['replicas'] = unpack("N". $numReplica, $this->read(4 * $numReplica, $stream));
-
-                $numIsr = current(unpack('N', $this->read(4, $stream)));
-                $partitionMetadata['isr'] = unpack("N". $numReplica, $this->read(4 * $numReplica, $stream));
-
-                $partitions[$partitionId] = $partitionMetadata;
-            }
-            $topicMetadata['partitions'] = $partitions;
-            $topics[$topicName] = $topicMetadata;
-
-        }
-        $metadata['topics'] = $topics;
-
-        return $metadata;
-    }
-
-    /**
      * Load Response after producing a message
      *
      * @param Resource $stream
      */
-    protected function loadProduceResponse($stream = null)
+    public function loadProduceResponse($stream = null)
     {
         if ($stream === null) {
             $stream = $this->socket;
@@ -545,8 +435,85 @@ abstract class Channel
             }
         }
 
-        return $response;
+        if (!$this->hasIncomingData()) {
+            return $response;
+        }
 
+        return false;
+
+    }
+
+    public function encodeRequestHeader($requestKey)
+    {
+        $data = pack('n', $requestKey); //short
+        $data .= pack('n', \Kafka\Kafka::REQUEST_API_VERSION); //short
+        $data .= pack('N', $this->generateRequestId());//int
+        $data .= $this->writeString($this->clientId);
+
+        return $data;
+    }
+
+    /**
+     * Encode payload for producing messageSet
+     * @return String payload in binary
+     */
+    public function encodeProduceMessageSet($topic, $partition, $messageSet)
+    {
+        // create message set
+        $data = $this->encodeRequestHeader(\Kafka\Kafka::REQUEST_KEY_PRODUCE);
+        $data .= pack('n', $this->requiredAcks);
+        $data .= pack('N', $this->ackTimeout);
+
+        $data .= pack('N', 1); // num topicsc
+        $data .= $this->writeString($topic);
+        $data .= pack('N', 1); // num partition
+        $data .= pack('N', $partition);
+
+        $messageSet = $this->packMessageSet($messageSet);
+        $data .= pack('N', strlen($messageSet)); // msg set size
+        $data .= $messageSet;
+
+        return $data;
+    }
+
+
+    /**
+     * Write string wire format
+     *
+     * write 2 byte size and the stream
+     * @param String $message
+     * @param String $format length prefix string format. see php pack()
+     */
+    public function writeString($message, $format='n') {
+        if (empty($message)) {
+            if ($format == 'n') {
+                $data = pack($format, 0xFFFF);// -1 short signed short
+            } elseif ($format == 'N') {
+                $data = pack($format, 0xFFFFFFFF);// -1 short signed short
+            } else {
+                $data = pack($format, -1);
+            }
+        } else {
+            $data = pack($format, strlen($message)) . $message;
+        }
+
+        return $data;
+    }
+
+    /**
+     * Read string format from kafka
+     *
+     * read 2 byte size and read the string
+     * @param Resource $stream
+     */
+    public function readString($stream = null)
+    {
+        if ($stream === null) {
+            $stream = $this->socket;
+        }
+
+        $len = current(unpack('n', $this->read(2, $stream)));
+        return $this->read($len, $stream);
     }
 
 
@@ -604,7 +571,34 @@ abstract class Channel
         return $payload;
     }
 
-    private function strToHex($string)
+    /**
+     * Pack multiple message into the MessageSet protocol
+     *
+     * https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-Messagesets
+     *
+     * @param Array $mssages array of Kafka\Message
+     * @return binary representation of mesage set
+     */
+    public function packMessageSet($messages)
+    {
+
+        $data = '';
+        foreach($messages as &$message) {
+            $data .= $this->packMessage($message);
+        }
+
+       return $data;
+    }
+
+    /**
+     * Function to convert binary data to hex string
+     *
+     * this is mainly use for debugging the wire protocol
+     *
+     * @param String $string data
+     * @return String the hex represenstation of the data separated by ':'
+     */
+    protected function strToHex($string)
     {
         $hex = '';
         for ($i=0; $i<strlen($string); $i++){
@@ -619,4 +613,8 @@ abstract class Channel
         return $hex;
     }
 
+    private function getConnectionString()
+    {
+        return "tcp://{$this->connectionString}";
+    }
 }

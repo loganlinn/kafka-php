@@ -18,8 +18,9 @@ use Kafka\Message;
 use Kafka\Iproducer;
 
 require_once 'Channel.php';
-class ProducerChannel
-    extends Channel implements IProducer
+require_once 'Metadata.php';
+
+class ProducerChannel implements IProducer
 {
     /**
      * @var array
@@ -28,28 +29,56 @@ class ProducerChannel
 
     /**
      * Required acknowledgement from brokker
-     *
-     * This field indicates how many acknowledgements the servers
-     * should receive before responding to the requet:
+     * * This field indicates how many acknowledgements the servers * should receive before responding to the requet:
      * 0 -> dont wait for acks
      * 1 -> wait until leader commit the message
      * n -> n > 1, wait for n broker to commit
      * -1 -> wait untill all replcia commit the message
      * @var Integer
      */
-    private $requiredAcks = \Kafka\Kafka::REQUEST_ACK_LEADER;
+    private $requiredAcks;
 
     private $ackTimeout = 1000; // 1 sec
 
+    private $connection;
+
+    /**
+     * @var Array mapping betweet 'host:port' to a channel
+     */
+    private $channels;
+
+    /**
+     * @var Array mapping between broker_id to a channel
+     */
+    private $brokers;
+
+    private $metadata;
+
     /**
      * @param Kafka $connection
-     * @param $requiredAcks @see requireAcks
+     * @param $requiredAcks @see requiredAcks
      */
-    public function __construct(Kafka $connection, $requiredAcks = \Kafka\Kafka::REQUEST_ACK_LEADER)
+    public function __construct(Kafka $connection, $requiredAcks = \Kafka\Kafka::REQUEST_ACK_NONE)
     {
-        parent::__construct($connection);
+        $this->connection = $connection;
         $this->messageQueue = array();
+        $this->channels = array();
         $this->requiredAcks = $requiredAcks;
+
+        $this->channels = array();
+        $connections = $connection->getConnection();
+        for ($i=0; $i<count($connections); $i++) {
+            $hostPort = $connections[$i];
+            $this->channels[$hostPort] = new Channel(
+                $hostPort,
+                $connection->getTimeout(),
+                $connection->getClientid(),
+                $this->requiredAcks
+            );
+        }
+
+        // get first element, maybe we pass multiple broker in the future to allow retry to multiple broker ?
+        $this->metadata = new Metadata(reset($this->channels));
     }
 
     /**
@@ -80,38 +109,23 @@ class ProducerChannel
         }
 
         foreach ($this->messageQueue as $topic => &$partitions) {
-            $metadata = $this->getTopicMetadata($topic);
-            $topicMetadata = $metadata['topics'][$topic];
+            $metadata = $this->metadata->getTopicMetadata($topic);
+            $topicMetadata = $metadata[$topic];
+
+            // update node_id => channel mapping
+            $brookerMetadata = $this->metadata->getBrokerMetadata();
+            $this->updateNodeIdToChannel($brookerMetadata);
 
             foreach ($partitions as $partition => &$messageSet) {
+                // get leader brooker
                 $leaderId = @$topicMetadata['partitions'][$partition]['leader_id'];
-                // send message to the leader
-
-                // create message set
-                $data = $this->encodeRequestHeader(\Kafka\Kafka::REQUEST_KEY_PRODUCE);
-                $data .= pack('n', $this->requiredAcks);
-                $data .= pack('N', $this->ackTimeout);
-
-                $data .= pack('N', 1); // num topicsc
-                $data .= $this->writeString($topic);
-                $data .= pack('N', 1); // num partition
-                $data .= pack('N', $partition);
-
-                $messageSet = $this->packMessageSet($messageSet);
-                $data .= pack('N', strlen($messageSet)); // msg set size
-                $data .= $messageSet;
-
-
-                if ($this->hasIncomingData()) {
-                    throw new \Kafka\Exception(
-                        "The channel has incomming data"
-                    );
-                }
+                $leader = $this->brookers[$leaderId];
+                $data = $leader->encodeProduceMessageSet($topic, $partition, $messageSet);
 
                 $expectsResposne = $this->requiredAcks > 0;
-                if ($this->send($data, $expectsResposne)) {
+                if ($leader->send($data, $expectsResposne)) {
                     if ($expectsResposne) {
-                        $response = $this->loadProduceResponse();
+                        $response = $leader->loadProduceResponse();
                         $errorCode = $response[$topic][$partition]['error_code'];
                         if ($errorCode != 0) {
                             throw \Kafka\Exception::createResponseException($errorCode);
@@ -127,23 +141,30 @@ class ProducerChannel
         return true;
     }
 
-    /**
-     * Pack multiple message into the MessageSet protocol
-     *
-     * https://cwiki.apache.org/confluence/display/KAFKA/A+Guide+To+The+Kafka+Protocol#AGuideToTheKafkaProtocol-Messagesets
-     *
-     * @param Array $mssages array of Kafka\Message
-     * @return binary representation of mesage set
-     */
-    private function packMessageSet($messages)
+    public function close()
     {
-
-        $data = '';
-        foreach($messages as &$message) {
-            $data .= $this->packMessage($message);
+        foreach($this->channels as $channel) {
+            $channel->close();
         }
-
-       return $data;
     }
 
+    private function updateNodeIdToChannel($brookerMetadata)
+    {
+        foreach($brookerMetadata as $nodeId => $metadata) {
+            $hostPort = $metadata['host'] . ':' . $metadata['port'];
+            $channel = @$this->channels[$hostPort];
+
+            if ($channel == null) {
+                $channel = new \Kafka\V08\Channel(
+                    $hostPort,
+                    $this->connection->getTimeout(),
+                    $this->connection->getClientid(),
+                    $this->requiredAcks
+                );
+                $this->channels[$hostPort] = $channel;
+            }
+
+            $this->brookers[$nodeId] = $channel;
+        }
+    }
 }

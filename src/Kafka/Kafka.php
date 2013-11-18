@@ -57,8 +57,7 @@ class Kafka
     const REQUEST_ACK_ALL = -1;
 
     // connection properties
-    private $host;
-    private $port;
+    private $connections;
     private $timeout;
     private $producerClass;
     private $consumerClass;
@@ -67,8 +66,7 @@ class Kafka
     /**
      * Constructor
      *
-     * @param string $host
-     * @param int    $port
+     * @param Array  $connections Kafka hosts ex ['localhost:9092']
      * @param int    $timeout socket timeout, in seconds
      * @param int    $kapiVersion Kafka API Version
      *     - the client currently recoginzes difference in the wire
@@ -76,15 +74,13 @@ class Kafka
      *    requests introduced in 0.8
      */
     public function __construct(
-        $host = 'localhost',
-        $port = 9092,
+        Array $connections = array(),
         $timeout = 6,
         $apiVersion = 0.8,
         $clientId = self::CLIENT_ID
     )
     {
-        $this->host = $host;
-        $this->port = $port;
+        $this->connections = $connections;
         $this->timeout = $timeout;
         $this->clientId = $clientId;
         $apiImplementation = self::getApiImplementation($apiVersion);
@@ -114,11 +110,24 @@ class Kafka
     }
 
     /**
+     * @param Integer the connection number order default to 0
+     * @throw \Kafka\Exception if num is greater than number of connections
      * @return string "protocol://<host>:<port>";
      */
-    public function getConnectionString()
+    public function getConnectionString($num=0)
     {
-        return "tcp://{$this->host}:{$this->port}";
+        if ($num > count($this->connections)) {
+            throw new \Kafka\Exception('Connection number exeeded number of brooker');
+        }
+        return "tcp://{$this->connections[$num]}";
+    }
+
+    /**
+     * @return Array
+     */
+    public function getConnection()
+    {
+        return $this->connections;
     }
 
     /**
@@ -151,4 +160,6 @@ class Kafka
     public function getClientid() {
         return $this->clientId;
     }
+
+
 }
