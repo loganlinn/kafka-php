@@ -17,8 +17,8 @@ use Kafka\Kafka;
 use Kafka\Message;
 use Kafka\Iproducer;
 
-require_once 'Channel.php';
-require_once 'Metadata.php';
+require_once realpath(dirname(__FILE__) . '/Channel.php');
+require_once realpath(dirname(__FILE__) . '/Metadata.php');
 
 class ProducerChannel implements IProducer
 {

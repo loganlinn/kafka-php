@@ -17,7 +17,7 @@ use Kafka\Kafka;
 use Kafka\Message;
 use Kafka\IConsumer;
 
-require_once 'Channel.php';
+require_once realpath(dirname(__FILE__) . '/Channel.php');
 
 class ConsumerChannel
     extends Channel
