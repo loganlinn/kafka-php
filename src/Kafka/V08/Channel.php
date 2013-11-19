@@ -329,6 +329,7 @@ class Channel
      */
     public function hasIncomingData()
     {
+
         if (is_resource($this->innerStream)) {
             $this->readBytes = 0;
 
@@ -361,7 +362,7 @@ class Channel
             $this->responseSize = current(unpack('N', $bytes32));
 
             // read corelation id
-            $this->read(4, $this->socket);
+            $corelationId = $this->read(4, $this->socket);
         }
 
         //has the request been read completely ?

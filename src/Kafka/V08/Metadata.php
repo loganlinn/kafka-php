@@ -30,15 +30,8 @@ class Metadata implements \Kafka\IMetadata
         $this->topicsMetadata = array();
     }
 
-    /**
-     * @return array[<topic>][<virutalPartition>] = array('broker'= <brokerId>, 'partition' = <brokerPartition>)
-     */
-    public function getTopicMetadata($topics = null)
+    protected function encodeMetadataRequest($topics = null)
     {
-        if ($topics == null) {
-            return false;
-        }
-
         $data = $this->channel->encodeRequestHeader(\Kafka\Kafka::REQUEST_KEY_METADATA);
 
         if (!is_array($topics)) {
@@ -50,6 +43,21 @@ class Metadata implements \Kafka\IMetadata
         foreach ($topics as $topic) {
             $data .= $this->channel->writeString($topic);
         }
+
+        return $data;
+
+    }
+
+    /**
+     * @return array[<topic>][<virutalPartition>] = array('broker'= <brokerId>, 'partition' = <brokerPartition>)
+     */
+    public function getTopicMetadata($topics = null)
+    {
+        if ($topics == null) {
+            return false;
+        }
+
+        $data = $this->encodeMetadataRequest($topics);
 
         if ($this->channel->send($data, true)) {
             $metadata =  $this->loadMetadataResponse();
@@ -120,7 +128,7 @@ class Metadata implements \Kafka\IMetadata
      * @param Resource $stream
      * @retrun Mixed Array of metadata if success or false
      */
-    function loadMetadataResponse()
+    protected function loadMetadataResponse()
     {
         if (!$this->channel->hasIncomingData()) {
             throw new \Kafka\Exception("Failed to get metadata response from the broker");
@@ -163,13 +171,13 @@ class Metadata implements \Kafka\IMetadata
 
                 $numReplica = current(unpack('N', $this->channel->read(4)));
                 for ($k=0; $k<$numReplica; $k++) {
-                $partitionMetadata['replicas'][] = unpack("N", $this->channel->read(4));
+                    $partitionMetadata['replicas'][] = current(unpack("N", $this->channel->read(4)));
 
                 }
 
                 $numIsr = current(unpack('N', $this->channel->read(4)));
                 for ($k=0; $k<$numIsr; $k++) {
-                    $partitionMetadata['isr'][] = unpack("N", $this->channel->read(4));
+                    $partitionMetadata['isr'][] = current(unpack("N", $this->channel->read(4)));
 
                 }
 

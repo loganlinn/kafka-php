@@ -82,6 +82,26 @@ class ProducerChannel implements IProducer
     }
 
     /**
+     * Set metadata implementation
+     *
+     * This function used to inject metadata class to producer. currently used for testing
+     */
+    protected function setMetadata(\Kafka\V08\Metadata $metadata)
+    {
+        $this->metadata = $metadata;
+    }
+
+    /**
+     * Set array of ('node_id' => \Kafka\V08\Channel)
+     *
+     * This function used to inject brokers dependency to producer. currently used for testing
+     */
+    protected function setChannels(Array $channels)
+    {
+        $this->channels = $channels;
+    }
+
+    /**
      * Add a single message to the produce queue.
      *
      * @param  Message|string $message
@@ -119,6 +139,11 @@ class ProducerChannel implements IProducer
             foreach ($partitions as $partition => &$messageSet) {
                 // get leader brooker
                 $leaderId = @$topicMetadata['partitions'][$partition]['leader_id'];
+                if ($leaderId === null) {
+                    throw new \Kafka\Exception(
+                        "Could not find metadata information of topic '{$topic}' partition '{$partition}'"
+                    );
+                }
                 $leader = $this->brookers[$leaderId];
                 $data = $leader->encodeProduceMessageSet($topic, $partition, $messageSet);
 
