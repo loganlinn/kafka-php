@@ -35,21 +35,32 @@ $broker = $options["b"];
 $topic  = $options["t"];
 $partition = isset($options["p"]) ? $options["p"] : 0;
 
-list($host,$port) = explode(":", $options["b"]);
+$brokers = explode(",",$options["b"]);
 
 // connection
-$kafka = new \Kafka\Kafka($host, $port, 6, 0.8);
+$kafka = new \Kafka\Kafka($brokers, 6, 0.8);
 
 // request channel
-$producer = $kafka->createProducer();
+$producer = $kafka->createProducer(1);
 
 // add a few messages
 $producer->add(
     new \Kafka\Message(
         $topic,
         $partition,
-        'test payload',
-        \Kafka\Kafka::COMPRESSION_NONE
+        "test payload 1 partition $partition to topic $topic",
+		\Kafka\Kafka::COMPRESSION_NONE
+    )
+);
+
+$producer->add(
+    new \Kafka\Message(
+        'test3',
+        1,
+        "test payload 2 partition $partition to topic $topic",
+				\Kafka\Kafka::COMPRESSION_NONE,
+				null,
+				"foo" // key, optional
     )
 );
 
