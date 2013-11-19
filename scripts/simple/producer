@@ -41,7 +41,7 @@ $brokers = explode(",",$options["b"]);
 $kafka = new \Kafka\Kafka($brokers, 6, 0.8);
 
 // request channel
-$producer = $kafka->createProducer(1);
+$producer = $kafka->createProducer(\Kafka\Kafka::REQUEST_ACK_NONE);
 
 // add a few messages
 $producer->add(
