@@ -5,7 +5,7 @@ require_once __DIR__ . "/../../../src/Kafka/V08/Channel.php";
 use Kafka\Kafka;
 use Kafka\Message;
 
-class TestChannel extends \Kafka\V08\Channel
+class TestChannel08 extends \Kafka\V08\Channel
 {
     public function __construct() {}
     public function setStreamContents($contents)
@@ -43,7 +43,7 @@ class TestChannel extends \Kafka\V08\Channel
 }
 
 //test uncompressed single message with no key
-$channel = new TestChannel();
+$channel = new TestChannel08();
 $message1 = new Message("topic1", 2, "Hello!", Kafka::COMPRESSION_NONE);
 $data = $channel->packMessage2($message1);
 
@@ -59,7 +59,7 @@ assert($data === $expectation);
 
 
 // test uncompressed single message with key 'foo'
-$channel = new TestChannel();
+$channel = new TestChannel08();
 $message1 = new Message("topic1", 2, "Hello!", Kafka::COMPRESSION_NONE, null, 'foo');
 $data = $channel->packMessage2($message1);
 
@@ -78,14 +78,14 @@ assert($data === $expectation);
 
 //test gzip compressed single message. Not Implemented yet!
 /*
-$channel = new TestChannel();
+$channel = new TestChannel08();
 $message2 = new Message("topic1", 2, "Hello!", Kafka::COMPRESSION_GZIP);
 $data = $channel->packMessage2($message2);
 assert($data === chr(0).chr(0).chr(0).chr(32).chr(1).chr(1).chr(90).chr(49).chr(84).chr(139).chr(31).chr(139).chr(8).chr(0).chr(0).chr(0).chr(0).chr(0).chr(0).chr(3).chr(243).chr(72).chr(205).chr(201).chr(201).chr(87).chr(4).chr(0).chr(86).chr(204).chr(42).chr(157).chr(6).chr(0).chr(0).chr(0));
  */
 
 //test send request 0.8 wire format and can read it back
-$channel = new TestChannel();
+$channel = new TestChannel08();
 $requestData = "xyz-request-data";
 $channel->send2($requestData, true); //expect response
 $data = $channel->getStreamContents();

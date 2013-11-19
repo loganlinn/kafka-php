@@ -7,7 +7,7 @@ use Kafka\Kafka;
 use Kafka\Message;
 use Kafka\V08\Metadata;
 
-class TestChannel extends \Kafka\V08\Channel
+class TestChannel08Metadata extends \Kafka\V08\Channel
 {
     public function __construct() {}
     public function setStreamContents($contents)
@@ -58,7 +58,7 @@ class TestMetadata extends \kafka\V08\Metadata
 }
 
 //test send request 0.8 wire format and can read it back
-$channel = new TestChannel();
+$channel = new TestChannel08Metadata();
 $requestData = "xyz-request-data";
 $channel->send2($requestData, true); //expect response
 $data = $channel->getStreamContents();
@@ -79,7 +79,7 @@ $leaderId = 1;
 $replicaId = 8;
 $isrId = 9;
 
-$channel = new TestChannel();
+$channel = new TestChannel08Metadata();
 
 // setup response
 $response = chr(0).chr(0).chr(0).chr(1); // add correlation ID;
