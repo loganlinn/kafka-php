@@ -36,9 +36,11 @@ $topic  = $options["t"];
 $partition = isset($options["p"]) ? $options["p"] : 0;
 
 $brokers = explode(",",$options["b"]);
+$timeout = 6; //seconds
+$protocol = 0.8;
 
 // connection
-$kafka = new \Kafka\Kafka($brokers, 6, 0.8);
+$kafka = new \Kafka\Kafka($brokers, $timeout, $protocol);
 
 // request channel
 $producer = $kafka->createProducer(\Kafka\Kafka::REQUEST_ACK_NONE);
@@ -55,8 +57,8 @@ $producer->add(
 
 $producer->add(
     new \Kafka\Message(
-        'test3',
-        1,
+        $topic,
+        $partition,
         "test payload 2 partition $partition to topic $topic",
 				\Kafka\Kafka::COMPRESSION_NONE,
 				null,
