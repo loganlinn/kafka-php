@@ -67,6 +67,11 @@ class ProducerChannel implements IProducer
 
         $this->channels = array();
         $connections = $connection->getConnection();
+
+        if (count($connections) == 0) {
+            throw new \Kafka\Exception("Empty Brooker list");
+        }
+
         for ($i=0; $i<count($connections); $i++) {
             $hostPort = $connections[$i];
             $this->channels[$hostPort] = new Channel(
