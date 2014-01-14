@@ -84,7 +84,7 @@ $channel = new TestChannel08Metadata();
 // setup response
 $response = chr(0).chr(0).chr(0).chr(1); // add correlation ID;
 
-// brooker informations
+// broker informations
 $response .= chr(0).chr(0).chr(0).chr(1); // 4 byte number of brokers
 $response .= pack('N', $brokerId); // 4 byte broker id
 $response .= pack('n', strlen($brokerHost)); // 2 byte string length broker name of 'TEST' (4)

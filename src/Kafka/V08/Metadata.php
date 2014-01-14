@@ -62,7 +62,7 @@ class Metadata implements \Kafka\IMetadata
         if ($this->channel->send($data, true)) {
             $metadata =  $this->loadMetadataResponse();
         } else {
-            throw new \Kafka\Exception("Failed to send metadata to brooker");
+            throw new \Kafka\Exception("Failed to send metadata to broker");
         }
 
         $this->brokerMetadata = $metadata['brokers'];

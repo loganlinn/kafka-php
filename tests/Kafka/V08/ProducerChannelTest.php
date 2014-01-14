@@ -7,7 +7,7 @@ use Kafka\Kafka;
 use Kafka\Message;
 
 
-define('TEST_HOST', 'localhost'); // fake brooker, no need to actually run kafka
+define('TEST_HOST', 'localhost'); // fake broker, no need to actually run kafka
 define('TEST_PORT', '9292');
 
 class TestV08ProducerChannel extends \Kafka\V08\ProducerChannel
@@ -102,7 +102,7 @@ class StubMetadata extends \Kafka\V08\Metadata
 $producer = new TestV08ProducerChannel(new Kafka(), \Kafka\Kafka::REQUEST_ACK_NONE);
 $producer->setMetadata2(new StubMetadata(null));
 
-// stub brooker channel implementation 'node_id' => Channel
+// stub broker channel implementation 'node_id' => Channel
 $channel = new StubChannel();
 $key = TEST_HOST .':' . TEST_PORT;
 $channels = array(

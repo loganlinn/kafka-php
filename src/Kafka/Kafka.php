@@ -117,7 +117,7 @@ class Kafka
     public function getConnectionString($num=0)
     {
         if ($num > count($this->connections)) {
-            throw new \Kafka\Exception('Connection number exeeded number of brooker');
+            throw new \Kafka\Exception('Connection number exeeded number of broker');
         }
         return "tcp://{$this->connections[$num]}";
     }

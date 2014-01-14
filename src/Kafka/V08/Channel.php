@@ -20,7 +20,7 @@ use Kafka\Message;
 class Channel
 {
     /**
-     * brooker hostname:port
+     * broker hostname:port
      *
      * @var String
      */
@@ -125,7 +125,7 @@ class Channel
     private $_correlationId = 0;
 
     /**
-     * list of kafka brookers information returned by a brooker
+     * list of kafka brokers information returned by a broker
      * @var Array
      */
     private $brokerList = array();

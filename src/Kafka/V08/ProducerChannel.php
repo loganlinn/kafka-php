@@ -28,7 +28,7 @@ class ProducerChannel implements IProducer
     private $messageQueue;
 
     /**
-     * Required acknowledgement from brokker
+     * Required acknowledgement from broker
      * * This field indicates how many acknowledgements the servers * should receive before responding to the requet:
      * 0 -> dont wait for acks
      * 1 -> wait until leader commit the message
@@ -138,18 +138,18 @@ class ProducerChannel implements IProducer
             $topicMetadata = $metadata[$topic];
 
             // update node_id => channel mapping
-            $brookerMetadata = $this->metadata->getBrokerMetadata();
-            $this->updateNodeIdToChannel($brookerMetadata);
+            $brokerMetadata = $this->metadata->getBrokerMetadata();
+            $this->updateNodeIdToChannel($brokerMetadata);
 
             foreach ($partitions as $partition => &$messageSet) {
-                // get leader brooker
+                // get leader broker
                 $leaderId = @$topicMetadata['partitions'][$partition]['leader_id'];
                 if ($leaderId === null) {
                     throw new \Kafka\Exception(
                         "Could not find metadata information of topic '{$topic}' partition '{$partition}'"
                     );
                 }
-                $leader = $this->brookers[$leaderId];
+                $leader = $this->brokers[$leaderId];
                 $data = $leader->encodeProduceMessageSet($topic, $partition, $messageSet);
 
                 $expectsResposne = $this->requiredAcks > 0;
@@ -178,9 +178,9 @@ class ProducerChannel implements IProducer
         }
     }
 
-    private function updateNodeIdToChannel($brookerMetadata)
+    private function updateNodeIdToChannel($brokerMetadata)
     {
-        foreach($brookerMetadata as $nodeId => $metadata) {
+        foreach($brokerMetadata as $nodeId => $metadata) {
             $hostPort = $metadata['host'] . ':' . $metadata['port'];
             $channel = @$this->channels[$hostPort];
 
@@ -194,7 +194,7 @@ class ProducerChannel implements IProducer
                 $this->channels[$hostPort] = $channel;
             }
 
-            $this->brookers[$nodeId] = $channel;
+            $this->brokers[$nodeId] = $channel;
         }
     }
 }
