@@ -33,17 +33,18 @@ if (!isset($options["b"])
 
 $partition = 0;
 $offset    = NULL;
-$broker    = $options["b"];
 $topic     = $options["t"];
+
+$brokers  = explode(",", $options["b"]);
+$timeout  = 6; //seconds
+$protocol = 0.8;
 
 if (isset($options["o"])) {
     $offset = new \Kafka\Offset($options["o"]);
 }
 
-list($host,$port) = explode(":", $broker);
-
 // connection
-$kafka = new \Kafka\Kafka($host, $port);
+$kafka = new \Kafka\Kafka($brokers, $timeout, $protocol);
 
 // consumer
 $consumer = $kafka->createConsumer();
