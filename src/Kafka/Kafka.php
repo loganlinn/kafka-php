@@ -74,13 +74,13 @@ class Kafka
      *    requests introduced in 0.8
      */
     public function __construct(
-        $connections = "",
+        $connections = array(),
         $timeout = 6,
         $apiVersion = 0.8,
         $clientId = self::CLIENT_ID
     )
     {
-        $this->connections = explode(",", $connections);
+        $this->connections = is_string($connections) ? explode(",", $connections) : $connections;
         $this->timeout = $timeout;
         $this->clientId = $clientId;
         $apiImplementation = self::getApiImplementation($apiVersion);
