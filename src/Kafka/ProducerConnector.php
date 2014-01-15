@@ -324,7 +324,7 @@ class ProducerConnector
                 );
             }
             $broker = $this->brokerMetadata[$brokerId];
-            $kafka = new Kafka($broker['host'], $broker['port']);
+            $kafka = new Kafka(array("{$broker['host']}:{$broker['port']}"));
             $this->producerList[$brokerId] = $kafka->createProducer();
         }
 

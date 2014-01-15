@@ -199,7 +199,7 @@ final class ConsumerConnector
             $broker = $this->metadata->getBrokerInfo($brokerId);
 
             // instantiate the kafka broker representation
-            $kafka = new Kafka($broker['host'], $broker['port']);
+            $kafka = new Kafka(array("{$broker['host']}:{$broker['port']}"));
 
             // add the kafka bronker to the list
             $this->brokerList[$brokerId] = $kafka;
